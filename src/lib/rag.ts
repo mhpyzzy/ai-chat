@@ -96,11 +96,19 @@ export async function ingestDocument(
     return { chunkCount: 0 };
   }
 
-  // 批量 embedding：一次请求处理所有 chunk，比逐条快得多
-  const { embeddings } = await embedMany({
-    model: embeddingModel,
-    values: chunks,
-  });
+  // 批量 embedding：分批处理，每批最多 10 条。
+  // 原因：阿里云百炼 text-embedding-v4 单次请求 batch size 上限为 10，
+  // 超过会报 InternalError.Algo.InvalidParameter: batch size is invalid, it should not be larger than 10。
+  const EMBED_BATCH_SIZE = 10;
+  const embeddings: number[][] = [];
+  for (let i = 0; i < chunks.length; i += EMBED_BATCH_SIZE) {
+    const batch = chunks.slice(i, i + EMBED_BATCH_SIZE);
+    const { embeddings: batchEmbeddings } = await embedMany({
+      model: embeddingModel,
+      values: batch,
+    });
+    embeddings.push(...batchEmbeddings);
+  }
 
   const records: VectorRecord[] = chunks.map((content, index) => ({
     id: nanoid(),

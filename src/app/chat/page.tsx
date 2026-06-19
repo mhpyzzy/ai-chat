@@ -45,7 +45,7 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex h-screen flex-col py-20 px-10">
+    <div className="flex h-[calc(100dvh-3.5rem)] flex-col gap-4 px-4 py-6 sm:px-6">
       <Conversation className="relative flex-1 ">
         <ConversationContent>
           {messages.length === 0 ? (

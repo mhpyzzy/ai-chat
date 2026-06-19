@@ -1,81 +1,8 @@
-"use client";
-import { useChat } from "@ai-sdk/react";
-import { useState,useEffect } from 'react';
+import { redirect } from "next/navigation";
 
-import { MessageSquareIcon } from "lucide-react";
-import {
-  Message,
-  MessageContent,
-  MessageResponse,
-} from "@/components/ai-elements/message";
-import {
-  Conversation,
-  ConversationContent,
-  ConversationScrollButton,
-  ConversationEmptyState,
-} from "@/components/ai-elements/conversation";
-import {
-  PromptInput,
-  type PromptInputMessage,
-  PromptInputTextarea,
-  PromptInputSubmit,
-} from "@/components/ai-elements/prompt-input";
-
-export default function Chat() {
-  const [input, setInput] = useState('');
-  const { messages, sendMessage, status } = useChat();
-  useEffect(() => {
-    console.log('------',messages)
-  }, [messages]);
-  const handleSubmit = (message: PromptInputMessage) => {
-    if (message.text.trim()) {
-      sendMessage({ text: message.text });
-      setInput("");
-    }
-  };
-  return (
-    <div className="flex h-screen flex-col py-20 px-10">
-      <Conversation className="relative flex-1 ">
-        <ConversationContent>
-          { messages.length === 0 ? (
-            <ConversationEmptyState
-              description="Messages will appear here as the conversation progresses."
-              icon={<MessageSquareIcon className="size-6" />}
-              title="Start a conversation"
-            />
-          ):(
-            messages.map(({ role, parts }, index) => (
-              <Message key={index} from={role}>
-                <MessageContent>
-                  {parts.map((part, i) => {
-                    switch (part.type) {
-                      case "text":
-                        return (
-                          <MessageResponse key={`${role}-${i}`}>
-                            {part.text}
-                          </MessageResponse>
-                        );
-                    }
-                  })}
-                </MessageContent>
-              </Message>
-            ))
-          )
-        }
-        </ConversationContent>
-        <ConversationScrollButton />
-      </Conversation>
-      <PromptInput onSubmit={handleSubmit} className="mx-auto w-full">
-        <PromptInputTextarea
-          value={input}
-          onChange={(e) => setInput(e.currentTarget.value)}
-          placeholder="输入消息..."
-        />
-        <PromptInputSubmit
-          status={status === "streaming" ? "streaming" : "ready"}
-          disabled={!input.trim() || status === "streaming"}
-        />
-      </PromptInput>  
-    </div>
-  );
+// 根路由重定向到 /chat：
+// /chat 是功能完整的 Agent 对话页（含 Tool Calling 渲染），
+// 把根路径指向它，避免存在两个相似的聊天入口造成混乱。
+export default function Home() {
+  redirect("/chat");
 }
