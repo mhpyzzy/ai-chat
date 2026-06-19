@@ -35,7 +35,7 @@ export default function Chat() {
   };
   return (
     <div className="flex h-screen flex-col py-20 px-10">
-      <Conversation className="relative flex-1">
+      <Conversation className="relative flex-1 ">
         <ConversationContent>
           { messages.length === 0 ? (
             <ConversationEmptyState
@@ -65,7 +65,7 @@ export default function Chat() {
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
-      <PromptInput onSubmit={handleSubmit} className="mx-auto w-full max-w-3xl">
+      <PromptInput onSubmit={handleSubmit} className="mx-auto w-full">
         <PromptInputTextarea
           value={input}
           onChange={(e) => setInput(e.currentTarget.value)}
