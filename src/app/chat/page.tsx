@@ -1,10 +1,10 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { useEffect, useState } from "react";
 import { isToolUIPart } from "ai";
-import { useEffect } from "react";
 
-import { MessageSquareIcon } from "lucide-react";
+import { BrainIcon, MessageSquareIcon, SparklesIcon } from "lucide-react";
 import {
   Message,
   MessageContent,
@@ -29,9 +29,27 @@ import {
   PromptInputTextarea,
   PromptInputSubmit,
 } from "@/components/ai-elements/prompt-input";
+import { Badge } from "@/components/ui/badge";
+import { SUMMARY_THRESHOLD } from "@/lib/memory";
+
+// 后端通过 data-memory part 发来的记忆诊断（见 route.ts）
+type MemoryDiagnostic = {
+  originalCount: number;
+  finalCount: number;
+  summarized: boolean;
+};
 
 export default function Chat() {
-  const { messages, sendMessage, status } = useChat();
+  const [diagnostic, setDiagnostic] = useState<MemoryDiagnostic | null>(null);
+  const { messages, sendMessage, status } = useChat({
+    // onData 接收后端 writer.write 发来的自定义 data part。
+    // 这里用它接收 data-memory，让记忆系统的处理过程在 UI 上可见。
+    onData: (part) => {
+      if (part.type === "data-memory") {
+        setDiagnostic(part.data as MemoryDiagnostic);
+      }
+    },
+  });
 
   // 调试用：观察 message parts 结构，理解 tool part 长什么样
   useEffect(() => {
@@ -46,6 +64,12 @@ export default function Chat() {
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] flex-col gap-4 px-4 py-6 sm:px-6">
+      {diagnostic ? (
+        <MemoryStatusPanel
+          messageCount={messages.length}
+          diagnostic={diagnostic}
+        />
+      ) : null}
       <Conversation className="relative flex-1 ">
         <ConversationContent>
           {messages.length === 0 ? (
@@ -118,6 +142,69 @@ export default function Chat() {
           disabled={status === "streaming"}
         />
       </PromptInput>
+    </div>
+  );
+}
+
+// 记忆状态面板：让 Agent 的记忆管理"可见"。
+// 显示：当前对话消息数、距摘要阈值的进度、本次请求记忆系统的处理（原始→处理后、是否摘要）。
+function MemoryStatusPanel({
+  messageCount,
+  diagnostic,
+}: {
+  messageCount: number;
+  diagnostic: MemoryDiagnostic;
+}) {
+  // 进度 = 当前消息数 / 摘要阈值，超过阈值说明会触发摘要压缩
+  const progress = Math.min(messageCount / SUMMARY_THRESHOLD, 1);
+  // 接近阈值（>80%）时提示用户即将触发摘要
+  const nearThreshold = progress > 0.8;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+      <span className="flex items-center gap-1.5 font-medium text-foreground">
+        <BrainIcon className="size-3.5 text-primary" />
+        记忆
+      </span>
+
+      {/* 对话进度条：当前消息数 vs 摘要阈值 */}
+      <div className="flex items-center gap-2">
+        <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+          <div
+            className={`h-full rounded-full transition-all ${
+              nearThreshold ? "bg-amber-500" : "bg-primary"
+            }`}
+            style={{ width: `${progress * 100}%` }}
+          />
+        </div>
+        <span>
+          {messageCount} / {SUMMARY_THRESHOLD} 条
+        </span>
+      </div>
+
+      {/* 本次请求的记忆处理：原始消息数 → 处理后消息数 */}
+      <span className="flex items-center gap-1.5">
+        本次发送：
+        <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+          {diagnostic.originalCount} 条
+        </Badge>
+        <span className="text-muted-foreground/60">→</span>
+        <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+          {diagnostic.finalCount} 条
+        </Badge>
+      </span>
+
+      {/* 是否触发摘要 */}
+      {diagnostic.summarized ? (
+        <Badge className="gap-1 bg-amber-500/15 text-amber-600 hover:bg-amber-500/15">
+          <SparklesIcon className="size-3" />
+          已触发摘要
+        </Badge>
+      ) : (
+        <span className="text-muted-foreground/70">
+          {nearThreshold ? "接近摘要阈值" : "正常"}
+        </span>
+      )}
     </div>
   );
 }
