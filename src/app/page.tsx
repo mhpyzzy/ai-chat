@@ -8,6 +8,7 @@ import {
   BrainIcon,
   MessageSquareIcon,
   SparklesIcon,
+  WorkflowIcon,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,13 @@ const CAPABILITIES: Capability[] = [
     description: "输入用户评价，自动分析情感、打标签、排优先级并生成回复建议，输出结构化数据。",
     icon: SparklesIcon,
     tags: ["Structured Output", "Zod", "类型安全"],
+  },
+  {
+    href: "/workflow",
+    title: "内容创作工作流",
+    description: "三个 Agent 协作完成内容创作：规划拆解需求、研究检索知识库、写作生成成品。每步进度实时可见。",
+    icon: WorkflowIcon,
+    tags: ["Multi-Agent", "Workflow", "SSE 流式"],
   },
 ];
 

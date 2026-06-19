@@ -7,6 +7,7 @@ import {
   BookOpenIcon,
   MessageSquareIcon,
   SparklesIcon,
+  WorkflowIcon,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,13 +23,14 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/chat", label: "对话", icon: MessageSquareIcon },
   { href: "/knowledge", label: "知识库", icon: BookOpenIcon },
   { href: "/analyze", label: "评价分析", icon: SparklesIcon },
+  { href: "/workflow", label: "工作流", icon: WorkflowIcon },
 ];
+
+const isActive = (pathname: string, href: string) =>
+  href === "/chat" ? pathname === "/chat" : pathname.startsWith(href);
 
 export function SiteNav() {
   const pathname = usePathname();
-
-  const isActive = (href: string) =>
-    href === "/chat" ? pathname === "/chat" : pathname.startsWith(href);
 
   return (
     <header className="sticky top-0 z-50 h-14 shrink-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -40,7 +42,7 @@ export function SiteNav() {
 
         <div className="flex items-center gap-1">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const active = isActive(href);
+            const active = isActive(pathname, href);
             return (
               <Link
                 key={href}
