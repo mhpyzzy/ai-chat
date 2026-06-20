@@ -33,7 +33,7 @@ export function SiteNav() {
   return (
     <header className="sticky top-0 z-50 h-14 shrink-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <nav className="mx-auto flex h-full w-full max-w-5xl items-center justify-between px-4">
-        <Link href="/chat" className="flex items-center gap-2 font-semibold tracking-tight">
+        <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
           <SparklesIcon className="size-5 text-primary" />
           <span>AI Agent Lab</span>
         </Link>
