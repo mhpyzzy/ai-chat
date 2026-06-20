@@ -9,6 +9,7 @@ import {
   MessageSquareIcon,
   SparklesIcon,
   WorkflowIcon,
+  CableIcon,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -52,6 +53,13 @@ const CAPABILITIES: Capability[] = [
     description: "三个 Agent 协作完成内容创作：规划拆解需求、研究检索知识库、写作生成成品。每步进度实时可见。",
     icon: WorkflowIcon,
     tags: ["Multi-Agent", "Workflow", "SSE 流式"],
+  },
+  {
+    href: "/mcp",
+    title: "MCP 协议对话",
+    description: "通过 Model Context Protocol 连接独立的知识库 Server。工具不在本地代码，而是通过协议发现和调用。",
+    icon: CableIcon,
+    tags: ["MCP", "stdio", "标准化协议"],
   },
 ];
 

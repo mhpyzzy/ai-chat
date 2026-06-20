@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
 import {
   BookOpenIcon,
+  CableIcon,
   MessageSquareIcon,
   SparklesIcon,
   WorkflowIcon,
@@ -24,6 +25,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/knowledge", label: "知识库", icon: BookOpenIcon },
   { href: "/analyze", label: "评价分析", icon: SparklesIcon },
   { href: "/workflow", label: "工作流", icon: WorkflowIcon },
+  { href: "/mcp", label: "MCP", icon: CableIcon },
 ];
 
 const isActive = (pathname: string, href: string) =>
