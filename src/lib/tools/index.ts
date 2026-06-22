@@ -1,6 +1,11 @@
 import { type InferUITools, type ToolSet, type UIDataTypes, type UIMessage, tool } from "ai";
 import { z } from "zod";
 import { formatContextWithSources, retrieve } from "@/lib/rag";
+import {
+  DEMO_USER_ID,
+  saveMemory as saveMemoryToDb,
+  type MemoryCategory,
+} from "@/lib/memory-store";
 
 /**
  * 工具集合 —— Agent 的"手脚"。
@@ -110,11 +115,41 @@ const searchKnowledgeBase = tool({
   },
 });
 
+// 工具 5：保存记忆（持久化 Memory 的核心 —— Agent 主动管理跨会话记忆）
+// 参考 ChatGPT Memory：不存对话原文，只存 Agent 提取的精简事实/偏好。
+// Agent 判断"这个信息值得记住"时主动调用，写入数据库，下次对话自动召回。
+const saveMemory = tool({
+  description:
+    "当用户透露值得长期记住的信息时调用，把信息保存到记忆库。" +
+    "适用场景：用户提到个人信息（如所在地、职业、负责的业务）、" +
+    "偏好（如喜欢简洁回答、偏好某种语言）、长期指令（如回答时附带代码示例）。" +
+    "不要存：临时信息、单次对话的上下文、寒暄。",
+  inputSchema: z.object({
+    category: z
+      .enum(["preference", "fact", "instruction"])
+      .describe("记忆类别：preference=偏好，fact=事实，instruction=长期指令"),
+    content: z
+      .string()
+      .max(200)
+      .describe("精简的记忆内容，用陈述句，不超过 200 字。例如「用户在上海工作」「用户偏好简洁的回答」"),
+  }),
+  execute: async ({ category, content }) => {
+    const result = await saveMemoryToDb(DEMO_USER_ID, category as MemoryCategory, content);
+    return {
+      category,
+      content,
+      action: result.action,
+      message: result.action === "created" ? "已记住这条信息" : "已更新这条记忆",
+    };
+  },
+});
+
 export const tools = {
   getWeather,
   calculate,
   getTime,
   searchKnowledgeBase,
+  save_memory: saveMemory,
 } satisfies ToolSet;
 
 // 下面两个类型给前端 useChat 用，让 tool part 渲染获得完整类型提示

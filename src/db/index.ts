@@ -5,7 +5,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 
 import { drizzle } from "drizzle-orm/node-postgres";
-import { documents, chunks } from "@/db/schema";
+import { chunks, documents, memories } from "@/db/schema";
 
 /**
  * 数据库连接单例。
@@ -24,12 +24,14 @@ export const db = drizzle({
     // 生产环境应配置正确的 CA 证书（supabase 提供的 prod-ca）
     ssl: { rejectUnauthorized: false },
   },
-  schema: { documents, chunks },
+  schema: { documents, chunks, memories },
 });
 
 // 重新导出 schema 类型，方便其他模块统一从 @/db 引入
-export { documents, chunks } from "@/db/schema";
+export { chunks, documents, memories } from "@/db/schema";
 export type {
+  MemoryRow,
+  NewMemory,
   DocumentRow,
   ChunkRow,
   NewDocument,

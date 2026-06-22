@@ -53,3 +53,35 @@ export type DocumentRow = typeof documents.$inferSelect;
 export type ChunkRow = typeof chunks.$inferSelect;
 export type NewDocument = typeof documents.$inferInsert;
 export type NewChunk = typeof chunks.$inferInsert;
+
+/**
+ * 持久化记忆表 —— 跨会话的用户记忆。
+ *
+ * 与 memory.ts 的上下文管理（裁剪 + 摘要）互补：
+ *   - 上下文管理管"单次对话怎么省 token"，会话结束即失
+ *   - 持久化记忆管"跨多次对话记住用户"，存数据库
+ *
+ * 存储 Agent 提取的精简事实/偏好（不存对话原文），参考 ChatGPT Memory 的做法：
+ * Agent 判断"这个信息值得记住"时主动写入，每轮对话全量注入 system prompt。
+ *
+ * category 取值：
+ *   preference  — 用户偏好（如"喜欢简洁回答"、"偏好 Python"）
+ *   fact        — 用户事实（如"在上海工作"、"负责退换货业务"）
+ *   instruction — 长期指令（如"回答时附带代码示例"）
+ */
+export const memories = pgTable("memories", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  // demo 阶段用固定 userId，接 Supabase Auth 后换成真实用户 ID
+  userId: text("user_id").notNull(),
+  category: text("category").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type MemoryRow = typeof memories.$inferSelect;
+export type NewMemory = typeof memories.$inferInsert;
