@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircleIcon, CheckCircle2Icon, FileTextIcon, Loader2Icon, Trash2Icon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -19,36 +20,97 @@ interface UploadResult {
   message: string;
 }
 
+// 查询缓存 key：所有知识库列表相关操作用这个 key 做失效
+const DOCS_QUERY_KEY = ["knowledge", "documents"] as const;
+
 export default function KnowledgePage() {
-  const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
-  const [totalChunks, setTotalChunks] = useState(0);
-  const [listLoading, setListLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // 列表查询：替代原来的 useCallback + useEffect + 手写 loading
+  // 自动获得：loading/error 状态、缓存、请求去重、windowFocus 重拉
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: DOCS_QUERY_KEY,
+    queryFn: async () => {
+      const res = await fetch("/api/knowledge");
+      if (!res.ok) throw new Error("加载失败");
+      return (await res.json()) as {
+        documents: KnowledgeDoc[];
+        totalChunks: number;
+      };
+    },
+  });
+
+  const docs = data?.documents ?? [];
+  const totalChunks = data?.totalChunks ?? 0;
+
+  // 上传 mutation：成功后 invalidate 列表缓存，自动 refetch
+  // 替代原来 onSubmit 里手写的 setSubmitting + setUploadResult + refreshDocs
+  const uploadMutation = useMutation({
+    mutationFn: async (input: { title: string; content: string }) => {
+      const res = await fetch("/api/knowledge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "上传失败");
+      return { title: input.title, chunkCount: json.chunkCount as number };
+    },
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: DOCS_QUERY_KEY });
+      setUploadResult({
+        ok: true,
+        message: `已入库：《${result.title}》，切分为 ${result.chunkCount} 个片段`,
+      });
+    },
+    onError: (err: Error) => {
+      setUploadResult({ ok: false, message: err.message });
+    },
+  });
+
+  // 删除 mutation：onMutate 里先从缓存移除该文档（乐观更新），
+  // 失败时 TanStack Query 自动回滚到 onMutate 返回的 previous。
+  const deleteMutation = useMutation({
+    mutationFn: async (title: string) => {
+      const res = await fetch("/api/knowledge", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      if (!res.ok) throw new Error("删除失败");
+      return { title };
+    },
+    onMutate: async (title) => {
+      await queryClient.cancelQueries({ queryKey: DOCS_QUERY_KEY });
+      const previous = queryClient.getQueryData<{
+        documents: KnowledgeDoc[];
+        totalChunks: number;
+      }>(DOCS_QUERY_KEY);
+      if (previous) {
+        const removed = previous.documents.find((d) => d.title === title);
+        queryClient.setQueryData(DOCS_QUERY_KEY, {
+          ...previous,
+          documents: previous.documents.filter((d) => d.title !== title),
+          totalChunks: previous.totalChunks - (removed?.chunkCount ?? 0),
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _title, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(DOCS_QUERY_KEY, ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: DOCS_QUERY_KEY });
+    },
+  });
+
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
-  const [deletingTitle, setDeletingTitle] = useState<string | null>(null);
 
   // 表单状态：两个输入框用原生受控组件即可，避免 zod 4 与 resolvers 的版本冲突
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; content?: string }>({});
-
-  const refreshDocs = useCallback(async () => {
-    setListLoading(true);
-    try {
-      const res = await fetch("/api/knowledge");
-      const data = await res.json();
-      setDocs(data.documents ?? []);
-      setTotalChunks(data.totalChunks ?? 0);
-    } catch {
-      // 静默失败，列表保持上次状态
-    } finally {
-      setListLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshDocs();
-  }, [refreshDocs]);
 
   const validate = (): boolean => {
     const next: { title?: string; content?: string } = {};
@@ -65,43 +127,20 @@ export default function KnowledgePage() {
     if (!validate()) return;
 
     setSubmitting(true);
-    try {
-      const res = await fetch("/api/knowledge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), content }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setUploadResult({ ok: false, message: data.error ?? "上传失败" });
-        return;
-      }
-      setUploadResult({
-        ok: true,
-        message: `已入库：《${data.title}》，切分为 ${data.chunkCount} 个片段`,
-      });
-      setTitle("");
-      setContent("");
-      await refreshDocs();
-    } catch {
-      setUploadResult({ ok: false, message: "网络错误，请稍后重试" });
-    } finally {
-      setSubmitting(false);
-    }
+    uploadMutation.mutate(
+      { title: title.trim(), content },
+      {
+        onSuccess: () => {
+          setTitle("");
+          setContent("");
+        },
+        onSettled: () => setSubmitting(false),
+      },
+    );
   };
 
-  const onDelete = async (docTitle: string) => {
-    setDeletingTitle(docTitle);
-    try {
-      await fetch("/api/knowledge", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: docTitle }),
-      });
-      await refreshDocs();
-    } finally {
-      setDeletingTitle(null);
-    }
+  const onDelete = (docTitle: string) => {
+    deleteMutation.mutate(docTitle);
   };
 
   return (
@@ -167,9 +206,14 @@ export default function KnowledgePage() {
         <h2 className="text-sm font-medium text-muted-foreground">
           已入库文档（{docs.length}）
         </h2>
-        {listLoading ? (
+        {isLoading ? (
           <div className="flex items-center gap-2 text-muted-foreground text-sm">
             <Loader2Icon className="size-4 animate-spin" /> 加载中...
+          </div>
+        ) : isError ? (
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-destructive/30 py-10 text-destructive text-sm">
+            <AlertCircleIcon className="size-6" />
+            {(error as Error)?.message ?? "加载失败，请刷新重试"}
           </div>
         ) : docs.length === 0 ? (
           <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-10 text-muted-foreground text-sm">
@@ -195,11 +239,15 @@ export default function KnowledgePage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  disabled={deletingTitle === doc.title}
+                  disabled={
+                    deleteMutation.isPending &&
+                    deleteMutation.variables === doc.title
+                  }
                   onClick={() => onDelete(doc.title)}
                   aria-label={`删除 ${doc.title}`}
                 >
-                  {deletingTitle === doc.title ? (
+                  {deleteMutation.isPending &&
+                  deleteMutation.variables === doc.title ? (
                     <Loader2Icon className="size-4 animate-spin" />
                   ) : (
                     <Trash2Icon className="size-4" />

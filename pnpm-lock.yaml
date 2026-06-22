@@ -38,6 +38,9 @@ dependencies:
   '@streamdown/mermaid':
     specifier: ^1.0.2
     version: 1.0.2(react@19.2.4)
+  '@tanstack/react-query':
+    specifier: ^5.101.0
+    version: 5.101.0(react@19.2.4)
   ai:
     specifier: ^6.0.208
     version: 6.0.208(zod@4.4.3)
@@ -2431,6 +2434,19 @@ packages:
       postcss: 8.5.15
       tailwindcss: 4.3.1
     dev: true
+
+  /@tanstack/query-core@5.101.0:
+    resolution: {integrity: sha512-cQetA74EB+seWySv1TTKr828TnP0u39m6LykwDXIo84SNortpDkp30TMEjkqtYCNP9c40uT/iwl6MLiufEt0Ow==}
+    dev: false
+
+  /@tanstack/react-query@5.101.0(react@19.2.4):
+    resolution: {integrity: sha512-rLlJXSpkqfizLWgkR5+eLeIk0MvTx/meEIR7LRjxic+qxiQP8zVjq7BqQkiCMNLQBlLfuOLqqr6KO5GtrDlmSg==}
+    peerDependencies:
+      react: ^18 || ^19
+    dependencies:
+      '@tanstack/query-core': 5.101.0
+      react: 19.2.4
+    dev: false
 
   /@ts-morph/common@0.27.0:
     resolution: {integrity: sha512-Wf29UqxWDpc+i61k3oIOzcUfQt79PIT9y/MWfAGlrkjg6lBC1hwDECLXPVJAhWjiGbfBCxZd65F/LIZF3+jeJQ==}
