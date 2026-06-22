@@ -71,8 +71,8 @@ export type NewChunk = typeof chunks.$inferInsert;
  */
 export const memories = pgTable("memories", {
   id: uuid("id").primaryKey().defaultRandom(),
-  // demo 阶段用固定 userId，接 Supabase Auth 后换成真实用户 ID
-  userId: text("user_id").notNull(),
+  // Supabase Auth 的 auth.uid() 返回 uuid，直接对齐
+  userId: uuid("user_id").notNull(),
   category: text("category").notNull(),
   content: text("content").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })

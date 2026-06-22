@@ -5,13 +5,13 @@ import {
   stepCountIs,
   streamText,
 } from "ai";
-import { tools, type ChatMessage } from "@/lib/tools";
+import { createTools, type ChatMessage } from "@/lib/tools";
 import { manageMemory, type MemoryDiagnostic } from "@/lib/memory";
 import {
-  DEMO_USER_ID,
   formatMemoriesForPrompt,
   getUserMemories,
 } from "@/lib/memory-store";
+import { createSupabaseServerClient } from "@/utils/supabase/server";
 
 // streaming 最长允许 30 秒（Vercel Serverless 函数上限）
 export const maxDuration = 30;
@@ -37,9 +37,24 @@ const BASE_SYSTEM_PROMPT = [
 export async function POST(req: Request) {
   const { messages }: { messages: ChatMessage[] } = await req.json();
 
+  // 鉴权：从 Supabase session 拿当前登录用户。
+  // 未登录直接拒绝——chat 接口需要 userId 才能做记忆隔离。
+  const supabase = await createSupabaseServerClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: "未登录" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const userId = user.id;
+
+  // 每个请求创建独立的工具集，注入当前用户 ID（save_memory 隔离用）
+  const tools = createTools(userId);
+
   // 持久化记忆召回：每轮对话开始，从数据库读取用户的所有长期记忆，
   // 拼进 system prompt。参考 ChatGPT Memory：记忆条目少时全量注入最简单可靠。
-  const userMemories = await getUserMemories(DEMO_USER_ID);
+  const userMemories = await getUserMemories(userId);
   const memorySection = formatMemoriesForPrompt(userMemories);
   const SYSTEM_PROMPT = memorySection
     ? `${BASE_SYSTEM_PROMPT}\n\n${memorySection}`

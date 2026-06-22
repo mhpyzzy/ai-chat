@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AuthButton } from "@/components/auth-button";
 import { buttonVariants } from "@/components/ui/button";
 import {
   BookOpenIcon,
@@ -59,6 +60,10 @@ export function SiteNav() {
               </Link>
             );
           })}
+
+          <div className="ml-2 border-l pl-2">
+            <AuthButton />
+          </div>
         </div>
       </nav>
     </header>
