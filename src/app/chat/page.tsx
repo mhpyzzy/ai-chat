@@ -4,7 +4,14 @@ import { useChat } from "@ai-sdk/react";
 import { useEffect, useState } from "react";
 import { isToolUIPart } from "ai";
 
-import { BrainIcon, MessageSquareIcon, SparklesIcon } from "lucide-react";
+import {
+  BrainIcon,
+  CalculatorIcon,
+  ClockIcon,
+  LockIcon,
+  SparklesIcon,
+} from "lucide-react";
+import Link from "next/link";
 import {
   Message,
   MessageContent,
@@ -21,7 +28,6 @@ import {
   Conversation,
   ConversationContent,
   ConversationScrollButton,
-  ConversationEmptyState,
 } from "@/components/ai-elements/conversation";
 import {
   PromptInput,
@@ -30,6 +36,9 @@ import {
   PromptInputSubmit,
 } from "@/components/ai-elements/prompt-input";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { createSupabaseBrowserClient } from "@/utils/supabase/client";
 import { SUMMARY_THRESHOLD } from "@/lib/memory";
 
 // 后端通过 data-memory part 发来的记忆诊断（见 route.ts）
@@ -39,8 +48,40 @@ type MemoryDiagnostic = {
   summarized: boolean;
 };
 
+// 欢迎页推荐问题：点击即发送，让用户一键体验核心能力
+const SUGGESTIONS = [
+  {
+    icon: SparklesIcon,
+    title: "知识库问答",
+    description: "检索内部文档，给出带来源引用的回答",
+    prompt: "公司有哪些产品？",
+  },
+  {
+    icon: CalculatorIcon,
+    title: "工具调用",
+    description: "让 Agent 调用计算器等工具完成复杂任务",
+    prompt: "(100 + 200) * 0.8 是多少？",
+  },
+  {
+    icon: BrainIcon,
+    title: "记忆能力",
+    description: "告诉助手你的偏好，它会跨会话记住",
+    prompt: "请记住：我是前端工程师，正在转 AI Agent 方向",
+  },
+  {
+    icon: ClockIcon,
+    title: "实时信息",
+    description: "查询当前时间和天气等实时数据",
+    prompt: "现在几点了？",
+  },
+] as const;
+
 export default function Chat() {
   const [diagnostic, setDiagnostic] = useState<MemoryDiagnostic | null>(null);
+  // 登录状态：用 onAuthStateChange 监听，未登录时禁用输入并提示
+  const [user, setUser] = useState<{ email: string } | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
   const { messages, sendMessage, status } = useChat({
     // onData 接收后端 writer.write 发来的自定义 data part。
     // 这里用它接收 data-memory，让记忆系统的处理过程在 UI 上可见。
@@ -50,6 +91,24 @@ export default function Chat() {
       }
     },
   });
+
+  // 监听 Supabase 登录状态（和 AuthButton 同一套机制）
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user ? { email: user.email ?? "" } : null);
+      setAuthChecked(true);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ? { email: session.user.email ?? "" } : null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // 调试用：观察 message parts 结构，理解 tool part 长什么样
   useEffect(() => {
@@ -62,21 +121,31 @@ export default function Chat() {
     }
   };
 
+  const isLoggedIn = authChecked && !!user;
+  const isEmpty = messages.length === 0;
+  const isStreaming = status === "streaming";
+
+  // 点击推荐问题，直接发送
+  const handleSuggestion = (prompt: string) => {
+    if (isLoggedIn && status === "ready") {
+      sendMessage({ text: prompt });
+    }
+  };
+
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col gap-4 px-4 py-6 sm:px-6">
+    <div className="mx-auto flex h-[calc(100dvh-3.5rem)] w-full max-w-3xl flex-col px-4 py-4 sm:px-6">
       {diagnostic ? (
         <MemoryStatusPanel
           messageCount={messages.length}
           diagnostic={diagnostic}
         />
       ) : null}
-      <Conversation className="relative flex-1 ">
+      <Conversation className="relative flex-1">
         <ConversationContent>
-          {messages.length === 0 ? (
-            <ConversationEmptyState
-              description="Messages will appear here as the conversation progresses."
-              icon={<MessageSquareIcon className="size-6" />}
-              title="Start a conversation"
+          {isEmpty ? (
+            <WelcomeScreen
+              isLoggedIn={isLoggedIn}
+              onSelect={handleSuggestion}
             />
           ) : (
             messages.map(({ role, parts }, index) => (
@@ -135,13 +204,79 @@ export default function Chat() {
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
-      <PromptInput onSubmit={handleSubmit} className="mx-auto w-full">
-        <PromptInputTextarea placeholder="输入消息，例如：北京天气怎么样？现在几点？(100+200)*0.8 是多少？" />
-        <PromptInputSubmit
-          status={status === "streaming" ? "streaming" : "ready"}
-          disabled={status === "streaming"}
-        />
-      </PromptInput>
+      {isLoggedIn ? (
+        <PromptInput onSubmit={handleSubmit} className="w-full">
+          <PromptInputTextarea placeholder="输入消息，或点击上方推荐问题开始对话…" />
+          <PromptInputSubmit
+            status={isStreaming ? "streaming" : "ready"}
+            disabled={isStreaming}
+          />
+        </PromptInput>
+      ) : (
+        <LoginPrompt />
+      )}
+    </div>
+  );
+}
+
+// 欢迎屏：居中展示助手介绍 + 推荐问题卡片。
+// 参考 ChatGPT / Claude 的空状态设计：让用户一眼知道"能问什么"。
+function WelcomeScreen({
+  isLoggedIn,
+  onSelect,
+}: {
+  isLoggedIn: boolean;
+  onSelect: (prompt: string) => void;
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-8 py-8">
+      {/* 助手标识 */}
+      <div className="flex flex-col items-center gap-3 text-center">
+        <div className="flex size-12 items-center justify-center rounded-2xl bg-primary/10">
+          <SparklesIcon className="size-6 text-primary" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold">AI 知识库助手</h2>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            具备知识库检索、工具调用和长期记忆能力的企业 Agent
+          </p>
+        </div>
+      </div>
+
+      {/* 推荐问题：点击即发送，一键体验核心能力 */}
+      <div className="grid w-full max-w-lg gap-2 sm:grid-cols-2">
+        {SUGGESTIONS.map(({ icon: Icon, title, description, prompt }) => (
+          <button
+            key={title}
+            type="button"
+            disabled={!isLoggedIn}
+            onClick={() => onSelect(prompt)}
+            className="group flex items-start gap-3 rounded-lg border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted transition-colors group-hover:bg-primary/10">
+              <Icon className="size-4 text-muted-foreground group-hover:text-primary" />
+            </div>
+            <div className="min-w-0 space-y-0.5">
+              <p className="text-sm font-medium">{title}</p>
+              <p className="text-xs text-muted-foreground">{description}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// 未登录时的输入区替代：锁图标 + 提示 + 登录按钮。
+// 用 buttonVariants + 原生 Link 保持和 AuthButton 一致的样式（Button 组件不支持 asChild）。
+function LoginPrompt() {
+  return (
+    <div className="mx-auto flex w-full items-center justify-center gap-3 rounded-lg border border-dashed bg-muted/30 px-4 py-3">
+      <LockIcon className="size-4 shrink-0 text-muted-foreground" />
+      <span className="text-sm text-muted-foreground">登录后即可开始对话</span>
+      <Link href="/login" className={cn(buttonVariants({ size: "sm" }))}>
+        前往登录
+      </Link>
     </div>
   );
 }
